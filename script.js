@@ -52,6 +52,9 @@ let localActivo = null;
 let productoEnEdicion = null;
 let opcionesElegidas = [];
 let metodoPago = "Efectivo";
+let direccionEnvio = "";
+
+// --- FUNCIONES DE RENDERIZADO ---
 
 function renderLocales() {
     const container = document.getElementById('main-content');
@@ -66,21 +69,24 @@ function renderLocales() {
                     </div>
                     <span>→</span>
                  </div>`;
-        setTimeout(() => {
-    const splash = document.getElementById('splash-screen');
-    if(splash) {
-        splash.style.opacity = '0';
-        setTimeout(() => splash.remove(), 500);
-    }
-}, 1000);
     });
     container.innerHTML = html + `</div>`;
+    
+    // Ocultar Splash Screen si existe
+    const splash = document.getElementById('splash-screen');
+    if(splash) {
+        setTimeout(() => {
+            splash.style.opacity = '0';
+            setTimeout(() => splash.remove(), 500);
+        }, 1000);
+    }
 }
 
 function verMenu(id) {
     localActivo = locales.find(l => l.id === id);
     const container = document.getElementById('main-content');
     document.getElementById('subtitulo').innerText = localActivo.nombre;
+    
     let html = `<button onclick="renderLocales()" class="btn-cancel-top">✖ Volver al listado</button>`;
     localActivo.menu.forEach(i => {
         html += `<div class="product-card">
@@ -91,11 +97,16 @@ function verMenu(id) {
                     </div>
                  </div>`;
     });
+    
+    // El footer se inyecta siempre, pero se oculta/muestra según el carrito
     html += `<div id="footer-carrito" class="footer-carrito" style="display:${carrito.length > 0 ? 'flex' : 'none'}">
                 <button onclick="mostrarResumen()" class="btn-ver-carrito">🛒 Ver Pedido (${carrito.length})</button>
              </div>`;
+    
     container.innerHTML = html;
 }
+
+// --- LOGICA DEL CARRITO Y MODAL ---
 
 function abrirModal(nombre, precio) {
     productoEnEdicion = { nombre, precio };
@@ -120,70 +131,44 @@ function cerrarModal() { document.getElementById('modal-personalizar').style.dis
 
 function guardarEnCarrito() {
     const notasTexto = document.getElementById('notas-adicionales').value;
-    let precioBase = productoEnEdicion.precio; //
     let adicionalesCosto = 0;
 
-    // Definimos los precios de los adicionales
     const preciosExtras = {
         'Extra queso': 800,
         'Doble carne': 2500,
         'Bacon extra': 1200
     };
 
-    // Sumamos el costo de cada opción seleccionada si existe en nuestra lista
     opcionesElegidas.forEach(opt => {
-        if (preciosExtras[opt]) {
-            adicionalesCosto += preciosExtras[opt];
-        }
+        if (preciosExtras[opt]) adicionalesCosto += preciosExtras[opt];
     });
 
     const finalNotas = [...opcionesElegidas, notasTexto].filter(x => x).join(", ");
     
     carrito.push({ 
         nombre: productoEnEdicion.nombre,
-        precio: precioBase + adicionalesCosto, //
+        precio: productoEnEdicion.precio + adicionalesCosto,
         notas: finalNotas || "Sin cambios" 
     });
     
     cerrarModal();
-    actualizarFooter(); //
+    actualizarFooter();
 }
 
-function calcularTotal() { return carrito.reduce((t, i) => t + i.precio, 0).toLocaleString('es-AR'); }
-
-function mostrarResumen() {
-    const container = document.getElementById('main-content');
-    let html = `<button onclick="verMenu('${localActivo.id}')" class="btn-cancel-top">← Seguir sumando</button>
-                <div class="resumen-container">`;
-    carrito.forEach((item, index) => {
-        html += `<div class="item-resumen">
-                    <div><strong>${item.nombre}</strong><p style="font-size:0.8rem; color:gray; margin:0;">${item.notas}</p></div>
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <span>$${item.precio.toLocaleString('es-AR')}</span>
-                        <button class="btn-del" onclick="eliminarItem(${index})">🗑️</button>
-                    </div>
-                 </div>`;
-    });
-    html += `<div style="margin-top:20px;">
-                <label>Método de Pago:</label>
-                <select onchange="metodoPago = this.value" style="width:100%; padding:10px; border-radius:10px; margin-top:5px; border: 1px solid #ccc;">
-                    <option>Efectivo</option><option>Cuenta DNI</option><option>Transferencia</option>
-                </select>
-             </div>
-             <div style="display:flex; justify-content:space-between; margin-top:20px; font-size:1.3rem; font-weight:800;">
-                <span>Total:</span><span>$${calcularTotal()}</span>
-             </div>
-             <button onclick="enviarWhatsApp()" class="btn-ver-carrito" style="width:100%; margin-top:20px;">🚀 Enviar WhatsApp</button></div>`;
-    container.innerHTML = html;
+// Función CRÍTICA que faltaba para mostrar el carrito
+function actualizarFooter() {
+    const footer = document.getElementById('footer-carrito');
+    if (footer) {
+        footer.style.display = carrito.length > 0 ? 'flex' : 'none';
+        footer.innerHTML = `<button onclick="mostrarResumen()" class="btn-ver-carrito">🛒 Ver Pedido (${carrito.length})</button>`;
+    }
 }
 
-function eliminarItem(idx) {
-    carrito.splice(idx, 1);
-    carrito.length === 0 ? renderLocales() : mostrarResumen();
-}
+// --- RESUMEN Y ENVÍO ---
 
-// Variable global nueva
-let direccionEnvio = "";
+function calcularTotal() {
+    return carrito.reduce((t, i) => t + i.precio, 0).toLocaleString('es-AR');
+}
 
 function mostrarResumen() {
     const container = document.getElementById('main-content');
@@ -204,13 +189,15 @@ function mostrarResumen() {
                 <label>📍 Dirección de entrega:</label>
                 <input type="text" id="input-direccion" placeholder="Ej: Libres del Sur 123" 
                        style="width:100%; padding:12px; border-radius:10px; margin-top:5px; border: 1px solid var(--border); box-sizing: border-box;"
-                       onchange="direccionEnvio = this.value">
+                       value="${direccionEnvio}" oninput="direccionEnvio = this.value">
              </div>
 
              <div style="margin-top:15px;">
                 <label>💳 Método de Pago:</label>
                 <select onchange="metodoPago = this.value" style="width:100%; padding:12px; border-radius:10px; margin-top:5px; border: 1px solid var(--border); background: var(--card-bg); color: var(--text-main);">
-                    <option>Efectivo</option><option>Cuenta DNI</option><option>Transferencia</option>
+                    <option ${metodoPago === 'Efectivo' ? 'selected' : ''}>Efectivo</option>
+                    <option ${metodoPago === 'Cuenta DNI' ? 'selected' : ''}>Cuenta DNI</option>
+                    <option ${metodoPago === 'Transferencia' ? 'selected' : ''}>Transferencia</option>
                 </select>
              </div>
 
@@ -223,16 +210,25 @@ function mostrarResumen() {
     container.innerHTML = html;
 }
 
+function eliminarItem(idx) {
+    carrito.splice(idx, 1);
+    if (carrito.length === 0) {
+        renderLocales();
+    } else {
+        mostrarResumen();
+    }
+}
+
 function enviarWhatsApp() {
-    if (!direccionEnvio.trim() === "") {
+    if (!direccionEnvio || direccionEnvio.trim() === "") {
         alert("Por favor, ingresá una dirección para el envío.");
-        document.getElementById('input-direccion').focus();
+        const input = document.getElementById('input-direccion');
+        if(input) input.focus();
         return;
     }
 
     let msg = `*Pedido Chascomús Burger*\n`;
     msg += `*Local:* ${localActivo.nombre}\n`;
-    msg += `*Cliente:* (Nombre)\n`;
     msg += `*Dirección:* ${direccionEnvio}\n`;
     msg += `---\n`;
     
